@@ -6,8 +6,9 @@ Ikki valyuta: so'm va $ alohida saqlanadi, javob "... so'm + ... $" ko'rinishida
 """
 
 import asyncio
+import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
@@ -46,6 +47,7 @@ def main_kb():
     b.button(text="⏰ Muddati o'tganlar")
     b.button(text="🔍 Mijoz qidirsh")
     b.button(text="📊 Hisobot")
+    b.button(text="📩 SMS yuborish")
     b.button(text="📥 Excel yuklab olish")
     b.adjust(2, 2, 2, 2, 2)
     return b.as_markup(resize_keyboard=True)
@@ -533,6 +535,111 @@ async def excel_export(message: Message):
                                   caption="📥 Qarzlar hisoboti (Excel)")
 
 
+# ---------------- SMS yuborish ----------------
+
+@dp.message(F.text == "📩 SMS yuborish")
+async def sms_start(message: Message, state: FSMContext):
+    if not is_allowed(message.from_user.id):
+        return
+    debtors = db.debtors()
+    if not debtors:
+        await message.answer("Hozircha qarzdorlar yo'q.")
+        return
+    kb = InlineKeyboardBuilder()
+    for c, u, d in debtors[:40]:
+        kb.button(text=f"{c['name']} ({fmt_money(u,d)})", callback_data=f"smsclient_{c['id']}")
+    kb.adjust(1)
+    await state.set_state(AddPayment.client)
+    await state.update_data(sms_mode=True)
+    await message.answer("Qaysi mijozga SMS yuborish?", reply_markup=kb.as_markup())
+
+
+@dp.callback_query(F.data.startswith("smsclient_"))
+async def sms_select(callback: CallbackQuery, state: FSMContext):
+    cid = int(callback.data.split("_")[1])
+    c = db.get_client(cid)
+    u, d = db.get_client_balance(cid)
+    if not c["phone"]:
+        await callback.message.edit_text(
+            f"⚠️ {c['name']} da telefon raqami yo'q. Avval mijozga telefon raqamini qo'shing."
+        )
+        await callback.answer()
+        await state.clear()
+        return
+    from sms import make_debt_message, send_sms, get_token
+    shop_phone = os.getenv("SHOP_PHONE", "")
+    msg = make_debt_message(c["name"], u, d, c.get("due_date"), shop_phone)
+    await callback.message.edit_text(
+        f"📩 Yuboriladigan SMS:\n\n{msg}\n\nYuborish uchun 'Ha' deb javob bering."
+    )
+    await state.update_data(sms_msg=msg, sms_phone=c["phone"])
+    await callback.answer()
+
+
+@dp.message(F.text.in_({"Ha", "ha", "HA", "✅ Ha"}))
+async def sms_confirm(message: Message, state: FSMContext):
+    data = await state.get_data()
+    if "sms_msg" not in data:
+        return
+    from sms import send_sms, get_token
+    token = os.getenv("ESKIZ_TOKEN") or get_token()
+    res = send_sms(data["sms_phone"], data["sms_msg"], token=token)
+    await state.clear()
+    if res.get("status") == "success" or "id" in res:
+        await message.answer("✅ SMS yuborildi.")
+    else:
+        await message.answer(f"❌ SMS yuborilmadi: {res.get('message', res)}")
+    return
+
+
+# ---------------- Mijoz tarixi ----------------
+
+@dp.message(F.text == "📜 Mijoz tarixi")
+async def history_start(message: Message, state: FSMContext):
+    if not is_allowed(message.from_user.id):
+        return
+    clients = db.list_clients()
+    if not clients:
+        await message.answer("Avval mijoz qo'shing.")
+        return
+    kb = InlineKeyboardBuilder()
+    for c in clients[:40]:
+        kb.button(text=c["name"], callback_data=f"histclient_{c['id']}")
+    kb.adjust(2)
+    await message.answer("Mijozni tanlang:", reply_markup=kb.as_markup())
+
+
+@dp.callback_query(F.data.startswith("histclient_"))
+async def history_show(callback: CallbackQuery, state: FSMContext):
+    cid = int(callback.data.split("_")[1])
+    c = db.get_client(cid)
+    ops = db.get_client_operations(cid)
+    u, d = db.get_client_balance(cid)
+    text = f"📜 *{c['name']} tarixi*\n"
+    if c["phone"]:
+        text += f"📞 {c['phone']}\n"
+    text += f"💳 Qolgan qarz: *{fmt_money(u, d)}*\n\n"
+    type_names = {
+        "sale": "🛒 Savdo",
+        "payment": "💰 To'lov",
+        "return": "↩️ Qaytarish",
+        "discount": "🏷 Chegirma",
+    }
+    for o in ops[:25]:
+        tn = type_names.get(o["type"], o["type"])
+        amt = fmt_money(o["amount_uzs"] or 0, o["amount_usd"] or 0)
+        text += f"• {tn}: {amt}"
+        if o["product"]:
+            text += f" ({o['product']})"
+        if o["due_date"]:
+            text += f" [muddat: {o['due_date']}]"
+        text += f" — {o['created_at'][:16]}\n"
+    if len(ops) > 25:
+        text += f"\n... va yana {len(ops)-25} ta operatsiya"
+    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.answer()
+
+
 # ---------------- Oddiy matn (mijoz tanlash uchun emas) ----------------
 
 @dp.message(Command("help"))
@@ -548,11 +655,65 @@ async def cmd_help(message: Message):
     )
 
 
+async def auto_reminder(admin_id):
+    """Har kuni kechqurun muddati yaqin/yetgan qarzdorlarga SMS yuborish.
+    (Soddalashtirilgan: bot ishga tushganda va har 24 soatda ishlaydi)
+    """
+    from sms import make_debt_message, send_sms, get_token
+    today = datetime.now().strftime("%Y-%m-%d")
+    soon = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+    token = os.getenv("ESKIZ_TOKEN") or get_token()
+    shop_phone = os.getenv("SHOP_PHONE", "")
+    sent = 0
+    for c, u, d, due in db.overdue_debtors(today=today):
+        msg = make_debt_message(c["name"], u, d, due, shop_phone)
+        if c["phone"] and token:
+            res = send_sms(c["phone"], "⏰ MUDDATI O'TDI. " + msg, token=token)
+            if res.get("status") == "success":
+                sent += 1
+    for c, u, d in db.due_today(today=soon):
+        if c["phone"] and token:
+            msg = make_debt_message(c["name"], u, d, soon, shop_phone)
+            res = send_sms(c["phone"], "⏰ Muddat yaqinlashmoqda. " + msg, token=token)
+            if res.get("status") == "success":
+                sent += 1
+    if sent:
+        try:
+            await bot.send_message(admin_id, f"📩 {sent} ta eslatma SMS yuborildi.")
+        except Exception:
+            pass
+
+
 async def main():
     db.init_db()
     print("Bot ishga tushdi...")
+    # Admin ID (birinchi ruxsat etilgan)
+    admin_id = config.ALLOWED_USER_IDS[0] if config.ALLOWED_USER_IDS else None
+    # Birinchi marta ishga tushganda avtomatik eslatma (ixtiyoriy)
+    if admin_id and os.getenv("AUTO_REMINDER", "false").lower() == "true":
+        asyncio.create_task(auto_reminder( 60 * 60 * 24))
     await dp.start_polling(bot)
 
 
+def schedule_daily():
+    """APScheduler orqali har kuni belgilangan vaqtda eslatma yuborish."""
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from sms import make_debt_message, send_sms, get_token
+        sched = AsyncIOScheduler()
+        admin_id = config.ALLOWED_USER_IDS[0] if config.ALLOWED_USER_IDS else None
+
+        async def job():
+            await auto_reminder(admin_id)
+
+        if admin_id:
+            sched.add_job(job, "cron", hour=19, minute=0)
+            sched.start()
+        return sched
+    except ImportError:
+        return None
+
+
 if __name__ == "__main__":
+    sched = schedule_daily()
     asyncio.run(main())

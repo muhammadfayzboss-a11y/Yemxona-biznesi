@@ -12,6 +12,9 @@ Yem-xashak (qopda yem) sotuvchisi uchun shaxsiy qarz va savdo hisobi boti.
 - 📋 Qarzdorlar ro'yxati (qolgan qarz, qachon olgani)
 - ⏰ Muddati o'tgan qarzlar
 - 🔍 Mijoz qidirish (10-lab/100-lab mijoz uchun)
+- 📜 Mijoz tarixi (barcha savdo/to'lovlar)
+- 📩 **SMS yuborish** (Eskiz.uz orqali qarzdorga xabar)
+- ⏰ Avtomatik eslatma (muddati yaqinlashganda/o'tganda SMS)
 - 💱 Ikki valyuta: so'm va $ alohida, javob `"... so'm + ... $"` ko'rinishida
 - 📊 Hisobot va 📥 Excel eksport
 
@@ -26,6 +29,10 @@ pip install openpyxl   # Excel uchun
    ```
    BOT_TOKEN=your_bot_token_from_botfather
    ALLOWED_USER_IDS=123456789
+   ESKIZ_EMAIL=your@email.com
+   ESKIZ_PASSWORD=your_password
+   SHOP_PHONE=+998901234567
+   AUTO_REMINDER=false
    ```
 2. O'z Telegram ID'ingizni @userinfobot orqali bilib oling, `ALLOWED_USER_IDS` ga yozing.
 3. `STRICT_MODE = True` qoldiring (boshqalar kira olmasin) — `config.py` da.
@@ -34,6 +41,13 @@ pip install openpyxl   # Excel uchun
 ```bash
 python bot.py
 ```
+
+## SMS (Eskiz.uz)
+- [eskiz.uz](https://eskiz.uz) da ro'yxatdan o'ting, hamyonni to'ldiring.
+- SMS yuboruvchi nomini (`from`) ro'yxatdan o'tkazing.
+- `.env` da `ESKIZ_EMAIL` / `ESKIZ_PASSWORD` yoki tayyor `ESKIZ_TOKEN` yozing.
+- "📩 SMS yuborish" tugmasi orqali qarzdorga xabar yuborasiz.
+- `AUTO_REMINDER=true` qilsangiz, har kuni 19:00 da muddati yaqin/o'tganlarga avtomatik SMS boradi.
 
 ## Valyuta qanday kiritiladi?
 - `500.000` yoki `500000` → so'm
@@ -48,6 +62,5 @@ SQLite bazasida (`yem_qarz.db`). Har bir operatsiya alohida yoziladi, shuning uc
 
 ## Keyingi bosqichlar (keyin qo'shiladi)
 - Web boshqaruv paneli
-- SMS yuborish (Eskiz.uz / Playmobile API)
 - Mahsulotlar ro'yxati (nomenklatura)
 - Ombor qoldig'i
