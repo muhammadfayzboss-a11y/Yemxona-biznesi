@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Muhim: token va shaxsiy sozlamalar git'ga kirmasligi kerak!
+.env
+config_local.py
+
+# Bazalar va eksportlar (ixtiyoriy: agar shaxsiy ma'lumot bo'lsa)
+yem_qarz.db
+qarzlar_hisoboti.xlsx
+
+# Kutubxonalar
+.arena/
+.cache/
