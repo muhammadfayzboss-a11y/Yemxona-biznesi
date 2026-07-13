@@ -33,6 +33,16 @@ def init_db():
     )
     """)
 
+    # Mahsulotlar ro'yxati (nomenklatura)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        unit TEXT DEFAULT 'qop',
+        note TEXT
+    )
+    """)
+
     # Operatsiyalar jadvali. type: 'sale', 'payment', 'return', 'discount'
     # amount_uzs / amount_usd - shu operatsiyaning valyutaga qarab qismi.
     # Mahsulot (nima olingan) matn sifatida saqlanadi.
@@ -232,6 +242,44 @@ def all_operations():
         "SELECT o.*, c.name as client_name FROM operations o "
         "LEFT JOIN clients c ON c.id=o.client_id ORDER BY o.created_at DESC, o.id DESC",
     )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+# ---------------- Mahsulotlar (nomenklatura) ----------------
+
+def add_product(name, unit="qop", note=None):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO products (name, unit, note) VALUES (?,?,?)",
+            (name.strip(), unit, note),
+        )
+        pid = cur.lastrowid
+        conn.commit()
+        conn.close()
+        return pid
+    except sqlite3.IntegrityError:
+        conn.close()
+        return None  # allaqachon bor
+
+
+def list_products():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM products ORDER BY name")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def find_products(query):
+    conn = get_conn()
+    cur = conn.cursor()
+    like = f"%{query}%"
+    cur.execute("SELECT * FROM products WHERE name LIKE ? ORDER BY name LIMIT 20", (like,))
     rows = cur.fetchall()
     conn.close()
     return rows

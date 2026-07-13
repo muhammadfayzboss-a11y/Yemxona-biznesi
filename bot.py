@@ -43,13 +43,15 @@ def main_kb():
     b.button(text="↩️ Qaytarish")
     b.button(text="🏷 Chegirma")
     b.button(text="👤 Mijoz qo'shish")
+    b.button(text="📦 Mahsulot qo'shish")
     b.button(text="📋 Qarzdorlar")
     b.button(text="⏰ Muddati o'tganlar")
+    b.button(text="📅 Bugun to'lash")
     b.button(text="🔍 Mijoz qidirsh")
     b.button(text="📊 Hisobot")
     b.button(text="📩 SMS yuborish")
     b.button(text="📥 Excel yuklab olish")
-    b.adjust(2, 2, 2, 2, 2)
+    b.adjust(2, 2, 2, 2, 2, 2)
     return b.as_markup(resize_keyboard=True)
 
 
@@ -183,6 +185,20 @@ async def add_client_start(message: Message, state: FSMContext):
 
 @dp.message(AddClient.name)
 async def add_client_name(message: Message, state: FSMContext):
+    data = await state.get_data()
+    if data.get("product_mode"):
+        # Mahsulot qo'shish rejimi
+        names = [n.strip() for n in message.text.split(",") if n.strip()]
+        added = 0
+        for n in names:
+            if db.add_product(n):
+                added += 1
+        await state.clear()
+        if added:
+            await message.answer(f"✅ {added} ta mahsulot qo'shildi.", reply_markup=main_kb())
+        else:
+            await message.answer("⚠️ Barcha mahsulotlar allaqachon mavjud yoki xato.", reply_markup=main_kb())
+        return
     await state.update_data(name=message.text.strip())
     await state.set_state(AddClient.phone)
     await message.answer("Telefon raqami (ixtiyoriy, '-' yozing agar yo'q bo'lsa):")
@@ -533,6 +549,50 @@ async def excel_export(message: Message):
         return
     await message.answer_document(document=open(path, "rb"),
                                   caption="📥 Qarzlar hisoboti (Excel)")
+
+
+# ---------------- Mahsulot qo'shish ----------------
+
+@dp.message(F.text == "📦 Mahsulot qo'shish")
+async def product_add(message: Message, state: FSMContext):
+    if not is_allowed(message.from_user.id):
+        return
+    kb = ReplyKeyboardBuilder()
+    kb.button(text="🔙 Bosh menyu")
+    kb.adjust(1)
+    await message.answer(
+        "Yangi mahsulot nomini yozing (masalan: Start yem).\n"
+        "Bir nechta bo'lsa vergul bilan: 'Start yem, Rost, Kafta'",
+        reply_markup=kb.as_markup(resize_keyboard=True),
+    )
+    await state.set_state(AddClient.name)  # vaqtinchalik state sifatida foydalanamiz
+    await state.update_data(product_mode=True)
+
+
+# ---------------- Bugun to'lash kerak ----------------
+
+@dp.message(F.text == "📅 Bugun to'lash")
+async def due_today_h(message: Message):
+    if not is_allowed(message.from_user.id):
+        return
+    rows = db.due_today()
+    if not rows:
+        await message.answer("✅ Bugun to'lash kerak bo'lgan qarzlar yo'q.")
+        return
+    text = "📅 *Bugun to'lash kerak:*\n\n"
+    for c, u, d in rows:
+        text += f"• *{c['name']}* — {fmt_money(u, d)}\n"
+        if c["phone"]:
+            text += f"   📞 {c['phone']}\n"
+    await message.answer(text, parse_mode="Markdown")
+
+
+# ---------------- Bosh menyuga qaytish ----------------
+
+@dp.message(F.text == "🔙 Bosh menyu")
+async def back_home(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Asosiy menyu:", reply_markup=main_kb())
 
 
 # ---------------- SMS yuborish ----------------
