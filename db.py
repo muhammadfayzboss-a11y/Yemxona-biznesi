@@ -63,6 +63,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+    init_stock_table()
 
 
 # ---------------- Mijozlar ----------------
@@ -348,3 +349,64 @@ def search_product_in_ops(query):
     rows = cur.fetchall()
     conn.close()
     return rows
+
+
+# ---------------- Ombor qoldig'i (stock) ----------------
+
+def add_stock(product_name, qty, unit="qop", note=None):
+    """Omborga mahsulot qo'shish (kirim)."""
+    conn = get_conn()
+    cur = conn.cursor()
+    # mavjud bo'lsa qo'shamiz
+    cur.execute("SELECT * FROM stock WHERE product_name=?", (product_name,))
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            "UPDATE stock SET qty = qty + ? WHERE product_name=?",
+            (qty, product_name),
+        )
+    else:
+        cur.execute(
+            "INSERT INTO stock (product_name, qty, unit, note) VALUES (?,?,?,?)",
+            (product_name, qty, unit, note),
+        )
+    conn.commit()
+    conn.close()
+
+
+def list_stock():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM stock ORDER BY product_name")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def deduct_stock(product_name, qty):
+    """Savdo bo'lganda ombordan kamaytirish."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM stock WHERE product_name=?", (product_name,))
+    row = cur.fetchone()
+    if row:
+        new_qty = max(0, (row["qty"] or 0) - qty)
+        cur.execute("UPDATE stock SET qty=? WHERE product_name=?", (new_qty, product_name))
+    conn.commit()
+    conn.close()
+
+
+def init_stock_table():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stock (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_name TEXT NOT NULL UNIQUE,
+        qty REAL DEFAULT 0,
+        unit TEXT DEFAULT 'qop',
+        note TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()

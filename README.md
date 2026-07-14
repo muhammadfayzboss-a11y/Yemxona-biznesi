@@ -23,6 +23,8 @@ Yem-xashak (qopda yem) sotuvchisi uchun shaxsiy qarz va savdo hisobi boti.
 - 📩 **SMS yuborish** (Eskiz.uz orqali qarzdorga xabar)
 - ⏰ Avtomatik eslatma (muddati yaqinlashganda/o'tganda SMS)
 - 💱 Ikki valyuta: so'm va $ alohida, javob `"... so'm + ... $"` ko'rinishida
+- 📦 **Ombor qoldig'i** (stock) — mahsulot qoldig'i, kirim/savdo bo'lganda kamayadi
+- 🌐 **Web boshqaruv paneli** (Flask) — katta ekran, jadval, hisobot, qarzdorlar
 - 📥 Excel eksport
 
 ## O'rnatish
@@ -63,6 +65,19 @@ python bot.py
 - `500 ming so'm` → 500 000 so'm
 
 Qolgan qarz har doim hisoblanib chiqariladi va `... so'm + ... $` ko'rinishida ko'rsatiladi.
+
+## Web boshqaruv paneli
+```bash
+pip install Flask
+WEB_PASSWORD=admin123 python web.py
+```
+Brauzerda: `http://localhost:5000` → parol kiriting.
+Sahifalar: Qarzdorlar, Ombor, Hisobot, Mijozlar.
+
+## Ombor qoldig'i
+- `/stock_add Start yem 50 qop` — omborga qo'shish
+- "📦 Ombor qoldig'i" tugmasi orqali ko'rish
+- Savdo bo'lganda avtomatik kamaymaydi (hozircha qo'lda), keyin avtomatlashtiriladi
 
 ## Ma'lumotlar qayerda?
 SQLite bazasida (`yem_qarz.db`). Har bir operatsiya alohida yoziladi, shuning uchun qarz adashmaydi va to'liq tarix saqlanadi.

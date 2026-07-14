@@ -53,6 +53,7 @@ def main_kb():
     b.button(text="🔍 Mahsulot qidirsh")
     b.button(text="📊 Hisobot")
     b.button(text="📩 SMS yuborish")
+    b.button(text="📦 Ombor qoldig'i")
     b.button(text="📥 Excel yuklab olish")
     b.adjust(2, 2, 2, 2, 2, 2)
     return b.as_markup(resize_keyboard=True)
@@ -538,6 +539,61 @@ async def report(message: Message):
     await message.answer(text, parse_mode="Markdown")
 
 
+# ---------------- Ombor qoldig'i (stock) ----------------
+
+@dp.message(F.text == "📦 Ombor qoldig'i")
+async def stock_view(message: Message):
+    if not is_allowed(message.from_user.id):
+        return
+    rows = db.list_stock()
+    if not rows:
+        await message.answer("📦 Ombor bo'sh. Mahsulot qo'shish uchun '➕ Omborga qo'shish'.")
+        return
+    text = "📦 *Ombor qoldig'i:*\n\n"
+    for r in rows:
+        text += f"• {r['product_name']}: {r['qty']} {r['unit']}\n"
+    text += "\n➕ Omborga qo'shish uchun '📥 Excel yuklab olish' emas, /stock_add yozing."
+    await message.answer(text, parse_mode="Markdown")
+
+
+@dp.message(Command("stock_add"))
+async def stock_add_cmd(message: Message):
+    if not is_allowed(message.from_user.id):
+        return
+    await message.answer(
+        "Omborga mahsulot qo'shish uchun:\n"
+        "`/stock_add Start yem 50 qop`\n"
+        "yoki bir nechta: `/stock_add Start yem 50 qop, Rost 30 qop`",
+        parse_mode="Markdown",
+    )
+
+
+@dp.message(Command("stock_add"))
+async def stock_add_handler(message: Message):
+    if not is_allowed(message.from_user.id):
+        return
+    text = message.text.replace("/stock_add", "").strip()
+    if not text:
+        await message.answer("❌ Mahsulot nomini va miqdorini yozing.")
+        return
+    added = 0
+    for part in text.split(","):
+        parts = part.strip().split()
+        if len(parts) >= 2:
+            try:
+                qty = float(parts[-2])
+                name = " ".join(parts[:-2])
+                unit = parts[-1] if len(parts) > 2 else "qop"
+                db.add_stock(name, qty, unit)
+                added += 1
+            except (ValueError, IndexError):
+                continue
+    if added:
+        await message.answer(f"✅ {added} ta mahsulot omborga qo'shildi.")
+    else:
+        await message.answer("❌ Format noto'g'ri. Misol: `/stock_add Start yem 50 qop`")
+
+
 # ---------------- Excel ----------------
 
 @dp.message(F.text == "📥 Excel yuklab olish")
@@ -726,7 +782,7 @@ async def sms_select(callback: CallbackQuery, state: FSMContext):
         return
     from sms import make_debt_message, send_sms, get_token
     shop_phone = os.getenv("SHOP_PHONE", "")
-    msg = make_debt_message(c["name"], u, d, c.get("due_date"), shop_phone)
+    msg = make_debt_message(c["name"], u, d, c["due_date"], shop_phone)
     await callback.message.edit_text(
         f"📩 Yuboriladigan SMS:\n\n{msg}\n\nYuborish uchun 'Ha' deb javob bering."
     )
