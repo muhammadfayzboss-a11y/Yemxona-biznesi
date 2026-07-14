@@ -47,12 +47,11 @@ def main_kb():
     b.button(text="📋 Qarzdorlar")
     b.button(text="⏰ Muddati o'tganlar")
     b.button(text="📅 Bugun to'lash")
-    b.button(text="📊 Oylik hisobot")
     b.button(text="🔍 Mijoz qidirsh")
-    b.button(text="🗑 Mijoz o'chirish")
+    b.button(text="📊 Hisobot")
     b.button(text="📩 SMS yuborish")
     b.button(text="📥 Excel yuklab olish")
-    b.adjust(2, 2, 2, 2, 2, 2, 2)
+    b.adjust(2, 2, 2, 2, 2, 2)
     return b.as_markup(resize_keyboard=True)
 
 
@@ -594,52 +593,6 @@ async def due_today_h(message: Message):
 async def back_home(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Asosiy menyu:", reply_markup=main_kb())
-
-
-# ---------------- Oylik hisobot ----------------
-
-@dp.message(F.text == "📊 Oylik hisobot")
-async def monthly_report_h(message: Message):
-    if not is_allowed(message.from_user.id):
-        return
-    now = datetime.now()
-    rep = db.monthly_report(now.year, now.month)
-    month_name = ["", "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-                  "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"][rep["month"]]
-    text = (
-        f"📊 *{month_name} {rep['year']} hisoboti*\n\n"
-        f"🛒 Jami savdo: {fmt_money(rep['sale_u'], rep['sale_d'])}\n"
-        f"💰 Jami to'lov: {fmt_money(rep['pay_u'], rep['pay_d'])}\n"
-        f"📝 Operatsiyalar: {rep['count']}\n"
-    )
-    await message.answer(text, parse_mode="Markdown")
-
-
-# ---------------- Mijoz o'chirish ----------------
-
-@dp.message(F.text == "🗑 Mijoz o'chirish")
-async def delete_start(message: Message, state: FSMContext):
-    if not is_allowed(message.from_user.id):
-        return
-    clients = db.list_clients()
-    if not clients:
-        await message.answer("Hozircha mijozlar yo'q.")
-        return
-    kb = InlineKeyboardBuilder()
-    for c in clients[:40]:
-        kb.button(text=f"🗑 {c['name']}", callback_data=f"delclient_{c['id']}")
-    kb.adjust(2)
-    await message.answer("O'chiriladigan mijozni tanlang (barcha tarixi bilan):",
-                         reply_markup=kb.as_markup())
-
-
-@dp.callback_query(F.data.startswith("delclient_"))
-async def delete_confirm(callback: CallbackQuery, state: FSMContext):
-    cid = int(callback.data.split("_")[1])
-    c = db.get_client(cid)
-    db.delete_client(cid)
-    await callback.message.edit_text(f"✅ {c['name']} va uning tarixi o'chirildi.")
-    await callback.answer()
 
 
 # ---------------- SMS yuborish ----------------

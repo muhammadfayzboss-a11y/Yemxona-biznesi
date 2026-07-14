@@ -9,18 +9,14 @@ Yem-xashak (qopda yem) sotuvchisi uchun shaxsiy qarz va savdo hisobi boti.
 - 💳 To'lov qabul qilish (qarz avtomatik kamayadi)
 - ↩️ Qaytarish (mahsulot qaytganda qarz kamayadi)
 - 🏷 Chegirma (qarz kamayadi)
-- 📦 **Mahsulotlar ro'yxati** (nomenklatura: Start yem, Rost, va h.k.)
 - 📋 Qarzdorlar ro'yxati (qolgan qarz, qachon olgani)
 - ⏰ Muddati o'tgan qarzlar
-- 📅 Bugun to'lash keraklar
 - 🔍 Mijoz qidirish (10-lab/100-lab mijoz uchun)
 - 📜 Mijoz tarixi (barcha savdo/to'lovlar)
-- 📊 **Oylik hisobot**
-- 🗑 Mijoz o'chirish (xato bo'lsa)
 - 📩 **SMS yuborish** (Eskiz.uz orqali qarzdorga xabar)
 - ⏰ Avtomatik eslatma (muddati yaqinlashganda/o'tganda SMS)
 - 💱 Ikki valyuta: so'm va $ alohida, javob `"... so'm + ... $"` ko'rinishida
-- 📥 Excel eksport
+- 📊 Hisobot va 📥 Excel eksport
 
 ## O'rnatish
 ```bash
@@ -66,5 +62,5 @@ SQLite bazasida (`yem_qarz.db`). Har bir operatsiya alohida yoziladi, shuning uc
 
 ## Keyingi bosqichlar (keyin qo'shiladi)
 - Web boshqaruv paneli
+- Mahsulotlar ro'yxati (nomenklatura)
 - Ombor qoldig'i
-- Chek yoki qarz tilxati (PDF)
