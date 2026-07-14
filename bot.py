@@ -47,7 +47,10 @@ def main_kb():
     b.button(text="📋 Qarzdorlar")
     b.button(text="⏰ Muddati o'tganlar")
     b.button(text="📅 Bugun to'lash")
+    b.button(text="🏆 Eng katta qarzdorlar")
+    b.button(text="📅 Sana oralig'i")
     b.button(text="🔍 Mijoz qidirsh")
+    b.button(text="🔍 Mahsulot qidirsh")
     b.button(text="📊 Hisobot")
     b.button(text="📩 SMS yuborish")
     b.button(text="📥 Excel yuklab olish")
@@ -593,6 +596,101 @@ async def due_today_h(message: Message):
 async def back_home(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Asosiy menyu:", reply_markup=main_kb())
+
+
+# ---------------- Eng katta qarzdorlar ----------------
+
+@dp.message(F.text == "🏆 Eng katta qarzdorlar")
+async def top_debtors_h(message: Message):
+    if not is_allowed(message.from_user.id):
+        return
+    rows = db.top_debtors(10)
+    if not rows:
+        await message.answer("✅ Qarzdorlar yo'q.")
+        return
+    text = "🏆 *Eng katta qarzdorlar (Top 10):*\n\n"
+    for i, (c, u, d) in enumerate(rows, 1):
+        text += f"{i}. *{c['name']}* — {fmt_money(u, d)}\n"
+    await message.answer(text, parse_mode="Markdown")
+
+
+# ---------------- Sana oralig'i hisoboti ----------------
+
+class RangeReport(StatesGroup):
+    start = State()
+    end = State()
+
+
+@dp.message(F.text == "📅 Sana oralig'i")
+async def range_start(message: Message, state: FSMContext):
+    if not is_allowed(message.from_user.id):
+        return
+    await state.set_state(RangeReport.start)
+    await message.answer("Boshlang'ich sanani yozing (DD.MM.YYYY):")
+
+
+@dp.message(RangeReport.start)
+async def range_start_date(message: Message, state: FSMContext):
+    d = parse_due(message.text.strip())
+    if not d:
+        await message.answer("❌ Sana noto'g'ri. DD.MM.YYYY ko'rinishida yozing:")
+        return
+    await state.update_data(start=d)
+    await state.set_state(RangeReport.end)
+    await message.answer("Oxirgi sanani yozing (DD.MM.YYYY):")
+
+
+@dp.message(RangeReport.end)
+async def range_end_date(message: Message, state: FSMContext):
+    d = parse_due(message.text.strip())
+    if not d:
+        await message.answer("❌ Sana noto'g'ri. DD.MM.YYYY ko'rinishida yozing:")
+        return
+    data = await state.get_data()
+    rep = db.range_report(data["start"], d)
+    await state.clear()
+    text = (
+        f"📅 *{data['start']} → {d} hisoboti*\n\n"
+        f"🛒 Savdo: {fmt_money(rep['sale_u'], rep['sale_d'])}\n"
+        f"💰 To'lov: {fmt_money(rep['pay_u'], rep['pay_d'])}\n"
+        f"📝 Operatsiyalar: {rep['count']}\n"
+    )
+    await message.answer(text, parse_mode="Markdown", reply_markup=main_kb())
+
+
+# ---------------- Mahsulot qidirish ----------------
+
+@dp.message(F.text == "🔍 Mahsulot qidirsh")
+async def product_search_start(message: Message, state: FSMContext):
+    if not is_allowed(message.from_user.id):
+        return
+    await state.set_state(SearchClient.query)
+    await message.answer("Mahsulot nomini yozing (masalan: 'Start'):")
+
+
+@dp.message(SearchClient.query)
+async def search_do(message: Message, state: FSMContext):
+    q = message.text.strip()
+    # Mijoz qidiruvmi yoki mahsulot qidiruvmi? State'da belgilanadi.
+    # Bu yerda oddiy: mijoz qidiruv uchun ishlatiladi, mahsulot uchun alohida state kerak.
+    # Vaqtinchalik: ikkalasini ham qilamiz (mijoz topilsa ko'rsatamiz, mahsulot ham)
+    rows_c = db.find_clients(q)
+    rows_p = db.search_product_in_ops(q)
+    await state.clear()
+    text = f"🔍 *'{q}' bo'yicha:*\n\n"
+    if rows_c:
+        text += "*Mijozlar:*\n"
+        for c in rows_c[:10]:
+            u, d = db.get_client_balance(c["id"])
+            text += f"• {c['name']} — {fmt_money(u, d)}\n"
+    if rows_p:
+        text += "\n*Operatsiyalar (mahsulot):*\n"
+        for o in rows_p[:10]:
+            amt = fmt_money(o["amount_uzs"] or 0, o["amount_usd"] or 0)
+            text += f"• {o['client_name']}: {amt} ({o['product']}) — {o['created_at'][:10]}\n"
+    if not rows_c and not rows_p:
+        text += "❌ Topilmadi."
+    await message.answer(text, parse_mode="Markdown")
 
 
 # ---------------- SMS yuborish ----------------

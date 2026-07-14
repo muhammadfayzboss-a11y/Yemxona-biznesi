@@ -283,3 +283,68 @@ def find_products(query):
     rows = cur.fetchall()
     conn.close()
     return rows
+
+
+# ---------------- Mijozni o'chirish ----------------
+
+def delete_client(cid):
+    """Mijoz va uning barcha operatsiyalarini o'chiradi."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM operations WHERE client_id=?", (cid,))
+    cur.execute("DELETE FROM clients WHERE id=?", (cid,))
+    conn.commit()
+    conn.close()
+
+
+# ---------------- Eng katta qarzdorlar ----------------
+
+def top_debtors(limit=10):
+    d = debtors()
+    d.sort(key=lambda x: x[1], reverse=True)
+    return d[:limit]
+
+
+# ---------------- Sana oralig'i hisoboti ----------------
+
+def range_report(start, end):
+    """start/end: 'YYYY-MM-DD'. Shu oraliqdagi operatsiyalar."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM operations WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at",
+        (start, end),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    sale_u = sale_d = pay_u = pay_d = 0.0
+    for o in rows:
+        if o["type"] == "sale":
+            sale_u += o["amount_uzs"] or 0
+            sale_d += o["amount_usd"] or 0
+        elif o["type"] == "payment":
+            pay_u += o["amount_uzs"] or 0
+            pay_d += o["amount_usd"] or 0
+    return {
+        "sale_u": sale_u, "sale_d": sale_d,
+        "pay_u": pay_u, "pay_d": pay_d,
+        "count": len(rows),
+    }
+
+
+# ---------------- Mahsulot bo'yicha qidiruv ----------------
+
+def search_product_in_ops(query):
+    """Mahsulot nomi qaysi operatsiyalarda uchraganini qaytaradi."""
+    conn = get_conn()
+    cur = conn.cursor()
+    like = f"%{query.lower()}%"
+    cur.execute(
+        "SELECT o.*, c.name as client_name FROM operations o "
+        "LEFT JOIN clients c ON c.id=o.client_id "
+        "WHERE lower(o.product) LIKE ? ORDER BY o.created_at DESC",
+        (like,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
